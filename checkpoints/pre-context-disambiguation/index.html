@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f7f5f0" />
+    <title>Second Brain</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand"><span class="brand-mark">✦</span><span>Second Brain</span></div>
+        <p class="tagline">A calm place for everything on your mind.</p>
+        <nav aria-label="Main navigation">
+          <button class="nav-item active" data-view="all"><span>⌂</span> All thoughts <span class="count" id="all-count">0</span></button>
+          <button class="nav-item" data-view="inbox"><span>↓</span> Inbox <span class="count" id="inbox-count">0</span></button>
+          <button class="nav-item" data-view="tasks"><span>✓</span> Tasks <span class="count" id="task-count">0</span></button>
+          <button class="nav-item" data-view="ideas"><span>✧</span> Ideas <span class="count" id="idea-count">0</span></button>
+          <button class="nav-item" data-view="pinned"><span>⚑</span> Pinned</button>
+        </nav>
+        <div class="sidebar-footer">
+          <p class="eyebrow">TODAY</p>
+          <p class="focus-copy">Clear your head.<br />Make space for what matters.</p>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow" id="date-label">TODAY</p>
+            <h1 id="view-title">All thoughts</h1>
+          </div>
+          <button class="avatar" title="Local AI settings" id="settings-button">Y</button>
+        </header>
+
+        <section class="capture-card">
+          <div class="capture-heading"><span class="capture-icon">✎</span><span>What’s on your mind?</span></div>
+          <form id="capture-form">
+            <textarea id="capture-input" rows="3" placeholder="Capture a thought, task, idea, or anything you don't want to lose…" required></textarea>
+            <div class="capture-actions">
+              <div class="type-picker" role="group" aria-label="Thought type">
+                <button type="button" class="type-button selected" data-type="note">Note</button>
+                <button type="button" class="type-button" data-type="task">Task</button>
+                <button type="button" class="type-button" data-type="idea">Idea</button>
+              </div>
+              <label class="ai-toggle"><input id="ai-analysis-input" type="checkbox" /> <span class="checkbox-mark">✓</span> Analyze with AI</label>
+              <button class="primary-button" type="submit">Capture thought <span>↵</span></button>
+            </div>
+          </form>
+        </section>
+
+        <section class="toolbar">
+          <div class="search-wrap"><span>⌕</span><input id="search-input" type="search" placeholder="Search your thoughts…" /></div>
+          <select id="sort-select" aria-label="Sort thoughts"><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select>
+        </section>
+
+        <section id="thought-list" class="thought-list" aria-live="polite"></section>
+        <section id="empty-state" class="empty-state hidden">
+          <div class="empty-icon">✦</div><h2>Your mind is clear here.</h2><p>Capture your first thought above. It doesn’t have to be polished.</p>
+        </section>
+    </main>
+  </div>
+  <div id="confirm-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+    <div class="modal-card small-modal"><button class="modal-close" data-close-modal="confirm-modal">×</button><p class="eyebrow">AI ANALYSIS</p><h2 id="confirm-title">Analyze this thought?</h2><p class="modal-copy">The note will be sent to your configured AI provider for explanation and web research.</p><label class="never-ask"><input id="never-ask-input" type="checkbox" /> Don’t ask me again</label><div class="modal-actions"><button class="secondary-button" data-close-modal="confirm-modal">Cancel</button><button class="primary-button" id="confirm-analysis-button">Analyze note</button></div></div>
+  </div>
+  <div id="note-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="note-modal-title"><div class="modal-card note-modal"><button class="modal-close" data-close-modal="note-modal">×</button><div id="note-modal-content"></div></div></div>
+  <div id="settings-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title"><div class="modal-card small-modal"><button class="modal-close" data-close-modal="settings-modal">×</button><p class="eyebrow">LOCAL SETTINGS</p><h2 id="settings-title">AI connection</h2><p class="modal-copy">The local server reads your API key from <code>OPENAI_API_KEY</code>. It is never stored in this webpage.</p><div class="settings-status" id="settings-status">Checking local server…</div><p class="modal-copy">Start the app with:</p><code class="command-block">OPENAI_API_KEY=your_key_here node server.js</code><div class="modal-actions"><button class="primary-button" data-close-modal="settings-modal">Done</button></div></div></div>
+  <div id="toast" class="toast" role="status"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
