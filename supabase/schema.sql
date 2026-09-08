@@ -65,6 +65,13 @@ alter table public.thoughts enable row level security;
 alter table public.ai_analyses enable row level security;
 alter table public.analysis_jobs enable row level security;
 
+-- Grants are required in addition to RLS policies. RLS filters rows; grants
+-- allow the authenticated role to perform the operation at all.
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on table public.thoughts to authenticated;
+grant select on table public.ai_analyses to authenticated;
+grant select, insert, update on table public.analysis_jobs to authenticated;
+
 drop policy if exists "Users can view their own thoughts" on public.thoughts;
 create policy "Users can view their own thoughts" on public.thoughts
 for select to authenticated using (auth.uid() = user_id);
