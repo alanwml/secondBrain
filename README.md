@@ -203,6 +203,18 @@ The hosted migration will replace:
 | `.env` API key | Secure hosted project secret |
 | Local fallback identity | Supabase Auth user identity |
 
+### Stage 1 implementation status
+
+The repository now includes the initial Supabase foundation in `supabase/`:
+
+- `supabase/schema.sql` creates user-owned thoughts, analyses, and analysis jobs.
+- Row Level Security policies protect each user's rows.
+- `supabase-config.example.js` documents the browser-safe project configuration.
+- The frontend supports Supabase email/password authentication and hosted thought persistence when `supabase-config.js` is present.
+- Local server mode remains available when Supabase is not configured.
+
+Follow [`supabase/README.md`](supabase/README.md) to connect a Supabase project. Hosted AI processing will be added in the next stage; until then, hosted analysis jobs are recorded as queued while the local AI worker remains available.
+
 Every user-owned row will include a `user_id`, and Row Level Security will ensure users can only access their own data.
 
 ## Planned production database model
