@@ -18,6 +18,12 @@ class ThoughtApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "ok")
 
+    def test_provider_status_does_not_expose_api_key(self):
+        response = self.client.get("/api/settings/provider/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("configured", response.json())
+        self.assertNotIn("api_key", response.json())
+
     def test_create_and_list_thought(self):
         thought_id = str(uuid.uuid4())
         create_response = self.client.post(

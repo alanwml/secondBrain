@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
-import { createThought, deleteThought, getThoughts, requestAnalysis, selectContext, updateThought } from "./api";
-import type { Thought, ThoughtType } from "./types";
+import { createThought, deleteThought, getProviderStatus, getThoughts, requestAnalysis, selectContext, updateThought } from "./api";
+import type { ProviderStatus, Thought, ThoughtType } from "./types";
 
 type View = "all" | "inbox" | "tasks" | "ideas" | "pinned";
 
@@ -24,6 +24,10 @@ function App() {
   const [selectedThoughtId, setSelectedThoughtId] = useState<string | null>(null);
   const [customContext, setCustomContext] = useState("");
   const [isSavingContext, setIsSavingContext] = useState(false);
+  const [analysisConfirmation, setAnalysisConfirmation] = useState<Thought | null>(null);
+  const [dontAskAgain, setDontAskAgain] = useState(() => localStorage.getItem("second-brain:skip-analysis-confirmation") === "true");
+  const [providerStatus, setProviderStatus] = useState<ProviderStatus | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
 
   const selectedThought = thoughts.find((thought) => thought.id === selectedThoughtId) ?? null;
   const hasActiveAnalysis = thoughts.some((thought) => thought.analysis_status === "queued" || thought.analysis_status === "processing");
@@ -33,6 +37,10 @@ function App() {
       .then(setThoughts)
       .catch((loadError: Error) => setError(loadError.message))
       .finally(() => setIsLoading(false));
+  }, []);
+
+  useEffect(() => {
+    getProviderStatus().then(setProviderStatus).catch(() => setProviderStatus(null));
   }, []);
 
   useEffect(() => {
@@ -90,6 +98,16 @@ function App() {
 
   async function handleAnalysis(thought: Thought) {
     if (thought.analysis_status === "completed" || thought.analysis_status === "queued" || thought.analysis_status === "processing") return;
+    if (!dontAskAgain) {
+      setAnalysisConfirmation(thought);
+      return;
+    }
+    await confirmAnalysis(thought);
+  }
+
+  async function confirmAnalysis(thought: Thought) {
+    setAnalysisConfirmation(null);
+    localStorage.setItem("second-brain:skip-analysis-confirmation", String(dontAskAgain));
     try {
       await requestAnalysis(thought.id);
       setThoughts((current) => current.map((item) => item.id === thought.id ? { ...item, analysis_status: "queued" } : item));
@@ -142,6 +160,8 @@ function App() {
             </button>
           ))}
         </nav>
+        <button className={`settings-link ${showSettings ? "active" : ""}`} onClick={() => setShowSettings((current) => !current)}>Settings</button>
+        {showSettings && <section className="settings-panel" aria-label="Settings"><p className="eyebrow">AI PROVIDER</p><strong>{providerStatus?.provider ?? "Provider status unavailable"}</strong><p>{providerStatus?.configured ? `Ready · ${providerStatus.model}` : "Not configured"}</p><small>{providerStatus?.base_url ?? "Check the Django backend"}</small><label className="settings-checkbox"><input type="checkbox" checked={dontAskAgain} onChange={(event) => { setDontAskAgain(event.target.checked); localStorage.setItem("second-brain:skip-analysis-confirmation", String(event.target.checked)); }} /> Don’t ask before AI analysis</label></section>}
       </aside>
 
       <main className="main-content">
@@ -212,11 +232,14 @@ function App() {
             {selectedThought.context_decision_made && selectedThought.selected_context && <div className="saved-context"><span className="saved-context-icon" aria-hidden="true">✓</span><div><p className="eyebrow">CONTEXT SELECTED</p><strong>{selectedThought.selected_context}</strong></div></div>}
             {selectedThought.latest_analysis.key_points.length > 0 && <section><h4>Key points</h4><ul>{selectedThought.latest_analysis.key_points.map((point, index) => <li key={`${point}-${index}`}>{point}</li>)}</ul></section>}
             {selectedThought.latest_analysis.related_concepts.length > 0 && <section><h4>Related concepts</h4><div className="concept-list">{selectedThought.latest_analysis.related_concepts.map((concept) => <span key={concept}>{concept}</span>)}</div></section>}
+            {selectedThought.latest_analysis.related_notes.length > 0 && <section><h4>Related notes</h4><div className="related-note-list">{selectedThought.latest_analysis.related_notes.map((note, index) => { const item = note as { id?: string; text?: string; type?: string }; return <div className="related-note" key={item.id ?? index}><span className="tag">{item.type ?? "note"}</span><span>{item.text ?? "Related thought"}</span></div>; })}</div></section>}
+            {selectedThought.latest_analysis.images.length > 0 && <section><h4>Source previews</h4><div className="image-grid">{selectedThought.latest_analysis.images.map((image, index) => { const item = image as { title?: string; url?: string; imageUrl?: string }; return item.imageUrl ? <a href={item.url} target="_blank" rel="noreferrer" key={`${item.imageUrl}-${index}`}><img src={item.imageUrl} alt="" /><span>{item.title ?? "Source"}</span></a> : null; })}</div></section>}
             {selectedThought.latest_analysis.sources.length > 0 && <section><h4>Sources</h4><div className="source-list">{selectedThought.latest_analysis.sources.map((source, index) => { const item = source as { title?: string; url?: string }; return item.url ? <a href={item.url} target="_blank" rel="noreferrer" key={`${item.url}-${index}`}>{item.title || item.url}<small>{item.url}</small></a> : null; })}</div></section>}
             <div className="analysis-metadata"><span>Runs: {selectedThought.analysis_runs}</span><span>Total input: {selectedThought.total_input_tokens.toLocaleString()}</span><span>Total output: {selectedThought.total_output_tokens.toLocaleString()}</span><span>Total cost: ${selectedThought.total_cost_usd}</span></div>
           </div> : <div className="no-analysis-detail"><span className="analysis-preview-icon" aria-hidden="true">✦</span><div><h3>{selectedThought.analysis_status === "failed" ? "Analysis failed" : "No full analysis yet"}</h3><p>{selectedThought.analysis_error || (selectedThought.analysis_status === "queued" ? "This thought is waiting in the analysis queue." : selectedThought.analysis_status === "processing" ? "This thought is being analyzed now." : "Run AI analysis to generate an explanation and key points.")}</p></div>{selectedThought.type !== "task" && selectedThought.analysis_status === "none" && <button className="primary-button" onClick={() => handleAnalysis(selectedThought)}>Analyze thought</button>}{selectedThought.analysis_status === "failed" && <button className="primary-button" onClick={() => handleAnalysis(selectedThought)}>Try again</button>}</div>}
         </section>
       </div>}
+      {analysisConfirmation && <div className="confirmation-backdrop" role="presentation"><section className="confirmation-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-analysis-title"><button className="detail-close" onClick={() => setAnalysisConfirmation(null)} aria-label="Cancel analysis">×</button><span className="analysis-preview-icon" aria-hidden="true">✦</span><h2 id="confirm-analysis-title">Analyze this thought with AI?</h2><p>Its content will be sent to your configured AI provider to generate an explanation, related notes, and sources.</p><div className="confirmation-thought">{analysisConfirmation.text}</div><label className="settings-checkbox"><input type="checkbox" checked={dontAskAgain} onChange={(event) => setDontAskAgain(event.target.checked)} /> Don’t ask me again</label><div className="confirmation-actions"><button className="secondary-button" onClick={() => setAnalysisConfirmation(null)}>Cancel</button><button className="primary-button" onClick={() => confirmAnalysis(analysisConfirmation)}>Analyze thought</button></div></section></div>}
     </div>
   );
 }

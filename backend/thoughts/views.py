@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db.models import QuerySet
 from django.http import JsonResponse
 from rest_framework import status
@@ -128,3 +129,8 @@ def select_thought_context(request, thought_id):
 @api_view(["GET"])
 def health_check(request):
     return JsonResponse({"status": "ok", "service": "second-brain-backend"})
+
+
+@api_view(["GET"])
+def provider_status(request):
+    return Response({"configured": bool(getattr(settings, "AI_API_KEY", "")), "provider": "OpenAI-compatible", "model": getattr(settings, "AI_MODEL", "gpt-5.5"), "base_url": getattr(settings, "AI_BASE_URL", "https://api.openai.com/v1")})

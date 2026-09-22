@@ -47,3 +47,10 @@ export interface Thought {
   total_output_tokens: number;
   total_cost_usd: string;
 }
+
+export interface ProviderStatus {
+  configured: boolean;
+  provider: string;
+  model: string;
+  base_url: string;
+}

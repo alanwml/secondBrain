@@ -1,4 +1,4 @@
-import type { Thought, ThoughtType } from "./types";
+import type { ProviderStatus, Thought, ThoughtType } from "./types";
 
 interface CreateThoughtInput {
   text: string;
@@ -14,7 +14,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
+    throw new Error(body?.error?.message ?? body?.detail ?? body?.message ?? `Request failed (${response.status})`);
   }
 
   if (response.status === 204) {
@@ -58,4 +58,8 @@ export function selectContext(id: string, context: string): Promise<Thought> {
     method: "POST",
     body: JSON.stringify({ context }),
   });
+}
+
+export function getProviderStatus(): Promise<ProviderStatus> {
+  return request<ProviderStatus>("/api/settings/provider/");
 }
