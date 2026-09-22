@@ -136,6 +136,25 @@ When the user chooses a context, the original note remains unchanged and a new a
 
 ## Running locally
 
+### Recommended: Django + React migration app
+
+For the current branch—including manual note connections and the knowledge
+graph—use the Django + React app, not `node server.js`:
+
+```bash
+python3 dev.py
+```
+
+Open http://localhost:5173. The React app uses Django on port 8000 for its
+API and starts the analysis worker alongside it. In a note's detail modal,
+use **＋ Connect note** near the top or scroll to **Connections**.
+
+### Legacy Node.js app
+
+`node server.js` and `http://localhost:8000` serve the original local MVP.
+They remain available for comparison, but do not include the Django migration
+features such as manual note connections or the knowledge graph.
+
 ### Basic offline mode
 
 Open `index.html` directly in a browser. This mode uses browser `localStorage` and does not provide background AI processing.
