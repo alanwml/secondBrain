@@ -54,3 +54,29 @@ export interface ProviderStatus {
   model: string;
   base_url: string;
 }
+
+export type RelationshipType = "related" | "builds_on" | "example_of" | "contradicts" | "follow_up_to";
+
+export interface NoteConnection {
+  id: number;
+  source_thought_id: string;
+  target_thought_id: string;
+  source_text: string;
+  target_text: string;
+  source_type: ThoughtType;
+  target_type: ThoughtType;
+  relationship_type: RelationshipType;
+  description: string;
+  origin: string;
+  status: "suggested" | "confirmed";
+  confidence: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GraphData {
+  nodes: Array<{ id: string; text: string; type: ThoughtType; pinned: boolean; focused: boolean }>;
+  edges: NoteConnection[];
+  focus: string | null;
+  depth: number;
+}

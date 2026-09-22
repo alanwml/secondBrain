@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.db.models import Count, Sum
 
-from .models import Analysis, AnalysisJob, Thought
+from .models import Analysis, AnalysisJob, NoteConnection, Thought
 
 
 class AnalysisSerializer(serializers.ModelSerializer):
@@ -19,6 +19,24 @@ class AnalysisJobSerializer(serializers.ModelSerializer):
     class Meta:
         model = AnalysisJob
         fields = ["id", "status", "attempts", "error_message", "created_at", "started_at", "completed_at"]
+
+
+class NoteConnectionSerializer(serializers.ModelSerializer):
+    source_thought_id = serializers.UUIDField(read_only=True)
+    target_thought_id = serializers.UUIDField(read_only=True)
+    source_text = serializers.CharField(source="source_thought.text", read_only=True)
+    target_text = serializers.CharField(source="target_thought.text", read_only=True)
+    source_type = serializers.CharField(source="source_thought.type", read_only=True)
+    target_type = serializers.CharField(source="target_thought.type", read_only=True)
+
+    class Meta:
+        model = NoteConnection
+        fields = [
+            "id", "source_thought_id", "target_thought_id", "source_text", "target_text",
+            "source_type", "target_type", "relationship_type", "description", "origin",
+            "status", "confidence", "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "source_thought_id", "target_thought_id", "origin", "status", "created_at", "updated_at"]
 
 
 class ThoughtSerializer(serializers.ModelSerializer):

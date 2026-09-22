@@ -1,4 +1,4 @@
-import type { ProviderStatus, Thought, ThoughtType } from "./types";
+import type { GraphData, NoteConnection, ProviderStatus, RelationshipType, Thought, ThoughtType } from "./types";
 
 interface CreateThoughtInput {
   text: string;
@@ -62,4 +62,24 @@ export function selectContext(id: string, context: string): Promise<Thought> {
 
 export function getProviderStatus(): Promise<ProviderStatus> {
   return request<ProviderStatus>("/api/settings/provider/");
+}
+
+export function getConnections(id: string): Promise<NoteConnection[]> {
+  return request<NoteConnection[]>(`/api/thoughts/${id}/connections/`);
+}
+
+export function createConnection(id: string, input: { target_thought_id: string; relationship_type: RelationshipType; description: string }): Promise<NoteConnection> {
+  return request<NoteConnection>(`/api/thoughts/${id}/connections/`, { method: "POST", body: JSON.stringify(input) });
+}
+
+export function deleteConnection(id: number): Promise<void> {
+  return request<void>(`/api/connections/${id}/`, { method: "DELETE" });
+}
+
+export function getGraph(params: { focus?: string; depth: number; relationship_type?: RelationshipType | ""; thought_type?: ThoughtType | ""; include_suggested: boolean }): Promise<GraphData> {
+  const query = new URLSearchParams({ depth: String(params.depth), include_suggested: String(params.include_suggested) });
+  if (params.focus) query.set("focus", params.focus);
+  if (params.relationship_type) query.set("relationship_type", params.relationship_type);
+  if (params.thought_type) query.set("thought_type", params.thought_type);
+  return request<GraphData>(`/api/graph/?${query.toString()}`);
 }

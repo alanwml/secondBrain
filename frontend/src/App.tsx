@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
-import { createThought, deleteThought, getProviderStatus, getThoughts, requestAnalysis, selectContext, updateThought } from "./api";
-import type { ProviderStatus, Thought, ThoughtType } from "./types";
+import { createConnection, createThought, deleteConnection, deleteThought, getConnections, getGraph, getProviderStatus, getThoughts, requestAnalysis, selectContext, updateThought } from "./api";
+import type { GraphData, NoteConnection, ProviderStatus, RelationshipType, Thought, ThoughtType } from "./types";
 
 type View = "all" | "inbox" | "tasks" | "ideas" | "pinned";
 
@@ -12,6 +12,19 @@ const viewTitles: Record<View, string> = {
   ideas: "Ideas",
   pinned: "Pinned",
 };
+
+const relationshipLabels: Record<RelationshipType, string> = { related: "Related", builds_on: "Builds on", example_of: "Example of", contradicts: "Contradicts", follow_up_to: "Follow-up to" };
+
+function KnowledgeGraph({ data, focusId, depth, relationshipType, thoughtType, includeSuggested, onFocus, onClose, onDepthChange, onRelationshipChange, onThoughtTypeChange, onSuggestedChange }: { data: GraphData | null; focusId: string | null; depth: number; relationshipType: RelationshipType | ""; thoughtType: ThoughtType | ""; includeSuggested: boolean; onFocus: (id: string) => void; onClose: () => void; onDepthChange: (depth: number) => void; onRelationshipChange: (value: RelationshipType | "") => void; onThoughtTypeChange: (value: ThoughtType | "") => void; onSuggestedChange: (value: boolean) => void }) {
+  const width = 760;
+  const height = 480;
+  const center = data?.nodes.find((node) => node.id === focusId) ?? data?.nodes[0];
+  const others = (data?.nodes ?? []).filter((node) => node.id !== center?.id);
+  const positions = new Map<string, { x: number; y: number }>();
+  if (center) positions.set(center.id, { x: width / 2, y: height / 2 });
+  others.forEach((node, index) => { const angle = (index / Math.max(others.length, 1)) * Math.PI * 2 - Math.PI / 2; const radius = others.length > 8 ? 175 : 145; positions.set(node.id, { x: width / 2 + Math.cos(angle) * radius, y: height / 2 + Math.sin(angle) * radius }); });
+  return <div className="graph-backdrop"><section className="graph-modal" role="dialog" aria-modal="true" aria-labelledby="graph-title"><header className="graph-header"><div><p className="eyebrow">KNOWLEDGE GRAPH</p><h2 id="graph-title">{focusId ? "Explore this neighborhood" : "Explore all connections"}</h2><p>{data?.nodes.length ?? 0} notes · {data?.edges.length ?? 0} connections</p></div><button className="detail-close" onClick={onClose} aria-label="Close graph">×</button></header><div className="graph-controls"><label>Depth <select value={depth} onChange={(event) => onDepthChange(Number(event.target.value))}><option value="1">1 hop</option><option value="2">2 hops</option><option value="3">3 hops</option></select></label><label>Relationship <select value={relationshipType} onChange={(event) => onRelationshipChange(event.target.value as RelationshipType | "")}><option value="">All types</option>{Object.entries(relationshipLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label><label>Note type <select value={thoughtType} onChange={(event) => onThoughtTypeChange(event.target.value as ThoughtType | "")}><option value="">All notes</option><option value="note">Notes</option><option value="idea">Ideas</option><option value="task">Tasks</option></select></label><label className="graph-check"><input type="checkbox" checked={includeSuggested} onChange={(event) => onSuggestedChange(event.target.checked)} /> Include suggestions</label></div><div className="graph-canvas"><svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Interactive knowledge graph">{data?.edges.map((edge) => { const source = positions.get(edge.source_thought_id); const target = positions.get(edge.target_thought_id); return source && target ? <line key={edge.id} x1={source.x} y1={source.y} x2={target.x} y2={target.y} className={`graph-edge ${edge.status}`} /> : null; })}{data?.nodes.map((node) => { const point = positions.get(node.id); return point ? <g key={node.id} className="graph-node" onClick={() => onFocus(node.id)} tabIndex={0} role="button"><circle cx={point.x} cy={point.y} r={node.id === focusId ? 31 : 25} className={`${node.type} ${node.id === focusId ? "focused" : ""}`} /><text x={point.x} y={point.y + 46} textAnchor="middle">{node.text.slice(0, 24)}{node.text.length > 24 ? "…" : ""}</text></g> : null; })}</svg></div><div className="graph-node-list"><strong>Visible notes</strong>{data?.nodes.map((node) => <button key={node.id} className={node.id === focusId ? "selected" : ""} onClick={() => onFocus(node.id)}><span className={`tag ${node.type}`}>{node.type}</span>{node.text}</button>)}</div></section></div>;
+}
 
 function App() {
   const [thoughts, setThoughts] = useState<Thought[]>([]);
@@ -28,6 +41,17 @@ function App() {
   const [dontAskAgain, setDontAskAgain] = useState(() => localStorage.getItem("second-brain:skip-analysis-confirmation") === "true");
   const [providerStatus, setProviderStatus] = useState<ProviderStatus | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [connections, setConnections] = useState<NoteConnection[]>([]);
+  const [connectionType, setConnectionType] = useState<RelationshipType>("related");
+  const [connectionTargetId, setConnectionTargetId] = useState("");
+  const [connectionDescription, setConnectionDescription] = useState("");
+  const [isGraphOpen, setIsGraphOpen] = useState(false);
+  const [graphFocusId, setGraphFocusId] = useState<string | null>(null);
+  const [graphData, setGraphData] = useState<GraphData | null>(null);
+  const [graphDepth, setGraphDepth] = useState(1);
+  const [graphRelationship, setGraphRelationship] = useState<RelationshipType | "">("");
+  const [graphThoughtType, setGraphThoughtType] = useState<ThoughtType | "">("");
+  const [includeSuggested, setIncludeSuggested] = useState(true);
 
   const selectedThought = thoughts.find((thought) => thought.id === selectedThoughtId) ?? null;
   const hasActiveAnalysis = thoughts.some((thought) => thought.analysis_status === "queued" || thought.analysis_status === "processing");
@@ -42,6 +66,16 @@ function App() {
   useEffect(() => {
     getProviderStatus().then(setProviderStatus).catch(() => setProviderStatus(null));
   }, []);
+
+  useEffect(() => {
+    if (!selectedThoughtId) { setConnections([]); return; }
+    getConnections(selectedThoughtId).then(setConnections).catch((connectionError: Error) => setError(connectionError.message));
+  }, [selectedThoughtId]);
+
+  useEffect(() => {
+    if (!isGraphOpen) return;
+    getGraph({ focus: graphFocusId ?? undefined, depth: graphDepth, relationship_type: graphRelationship, thought_type: graphThoughtType, include_suggested: includeSuggested }).then(setGraphData).catch((graphError: Error) => setError(graphError.message));
+  }, [graphDepth, graphFocusId, graphRelationship, graphThoughtType, includeSuggested, isGraphOpen]);
 
   useEffect(() => {
     if (!hasActiveAnalysis) return;
@@ -134,8 +168,27 @@ function App() {
     }
   }
 
+  async function handleCreateConnection(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedThoughtId || !connectionTargetId || connectionTargetId === selectedThoughtId) return;
+    try {
+      const created = await createConnection(selectedThoughtId, { target_thought_id: connectionTargetId, relationship_type: connectionType, description: connectionDescription.trim() });
+      setConnections((current) => [created, ...current.filter((item) => item.id !== created.id)]);
+      setConnectionTargetId(""); setConnectionDescription("");
+    } catch (connectionError) { setError((connectionError as Error).message); }
+  }
+
+  async function handleDeleteConnection(connection: NoteConnection) {
+    try { await deleteConnection(connection.id); setConnections((current) => current.filter((item) => item.id !== connection.id)); }
+    catch (connectionError) { setError((connectionError as Error).message); }
+  }
+
   function openThought(thought: Thought) {
     setSelectedThoughtId(thought.id);
+  }
+
+  function openGraph(focusId: string | null = null) {
+    setGraphFocusId(focusId); setGraphData(null); setIsGraphOpen(true);
   }
 
   function closeThought() {
@@ -166,7 +219,7 @@ function App() {
 
       <main className="main-content">
         <header className="topbar">
-          <div><p className="eyebrow">DJANGO + REACT MIGRATION</p><h1>{viewTitles[view]}</h1></div>
+          <div><p className="eyebrow">DJANGO + REACT MIGRATION</p><h1>{viewTitles[view]}</h1></div><button className="graph-launch-button" onClick={() => openGraph()}>◎ Knowledge graph</button>
         </header>
 
         <section className="capture-card">
@@ -237,9 +290,11 @@ function App() {
             {selectedThought.latest_analysis.sources.length > 0 && <section><h4>Sources</h4><div className="source-list">{selectedThought.latest_analysis.sources.map((source, index) => { const item = source as { title?: string; url?: string }; return item.url ? <a href={item.url} target="_blank" rel="noreferrer" key={`${item.url}-${index}`}>{item.title || item.url}<small>{item.url}</small></a> : null; })}</div></section>}
             <div className="analysis-metadata"><span>Runs: {selectedThought.analysis_runs}</span><span>Total input: {selectedThought.total_input_tokens.toLocaleString()}</span><span>Total output: {selectedThought.total_output_tokens.toLocaleString()}</span><span>Total cost: ${selectedThought.total_cost_usd}</span></div>
           </div> : <div className="no-analysis-detail"><span className="analysis-preview-icon" aria-hidden="true">✦</span><div><h3>{selectedThought.analysis_status === "failed" ? "Analysis failed" : "No full analysis yet"}</h3><p>{selectedThought.analysis_error || (selectedThought.analysis_status === "queued" ? "This thought is waiting in the analysis queue." : selectedThought.analysis_status === "processing" ? "This thought is being analyzed now." : "Run AI analysis to generate an explanation and key points.")}</p></div>{selectedThought.type !== "task" && selectedThought.analysis_status === "none" && <button className="primary-button" onClick={() => handleAnalysis(selectedThought)}>Analyze thought</button>}{selectedThought.analysis_status === "failed" && <button className="primary-button" onClick={() => handleAnalysis(selectedThought)}>Try again</button>}</div>}
+          <section className="connections-section"><div className="connections-heading"><div><h4>Connections</h4><p>Manual links between this thought and the rest of your knowledge.</p></div><button className="secondary-button" onClick={() => openGraph(selectedThought.id)}>View neighborhood</button></div>{connections.length === 0 ? <p className="muted-copy">No connections yet. Add one below.</p> : <div className="connection-list">{connections.map((connection) => { const otherId = connection.source_thought_id === selectedThought.id ? connection.target_thought_id : connection.source_thought_id; const otherText = connection.source_thought_id === selectedThought.id ? connection.target_text : connection.source_text; const otherType = connection.source_thought_id === selectedThought.id ? connection.target_type : connection.source_type; return <div className="connection-row" key={connection.id}><button className="connection-note" onClick={() => { const target = thoughts.find((item) => item.id === otherId); if (target) openThought(target); }}><span className={`tag ${otherType}`}>{otherType}</span><strong>{otherText}</strong><small>{relationshipLabels[connection.relationship_type]}{connection.description ? ` · ${connection.description}` : ""}</small></button><button className="connection-delete" onClick={() => handleDeleteConnection(connection)} aria-label="Delete connection">×</button></div>; })}</div>}<form className="connection-form" onSubmit={handleCreateConnection}><select value={connectionTargetId} onChange={(event) => setConnectionTargetId(event.target.value)} aria-label="Choose note to connect"><option value="">Choose a note…</option>{thoughts.filter((item) => item.id !== selectedThought.id).map((item) => <option value={item.id} key={item.id}>{item.text.slice(0, 70)}</option>)}</select><select value={connectionType} onChange={(event) => setConnectionType(event.target.value as RelationshipType)} aria-label="Relationship type">{Object.entries(relationshipLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select><input value={connectionDescription} onChange={(event) => setConnectionDescription(event.target.value)} placeholder="Why are these connected? (optional)" /><button className="primary-button" type="submit" disabled={!connectionTargetId}>Add connection</button></form></section>
         </section>
       </div>}
       {analysisConfirmation && <div className="confirmation-backdrop" role="presentation"><section className="confirmation-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-analysis-title"><button className="detail-close" onClick={() => setAnalysisConfirmation(null)} aria-label="Cancel analysis">×</button><span className="analysis-preview-icon" aria-hidden="true">✦</span><h2 id="confirm-analysis-title">Analyze this thought with AI?</h2><p>Its content will be sent to your configured AI provider to generate an explanation, related notes, and sources.</p><div className="confirmation-thought">{analysisConfirmation.text}</div><label className="settings-checkbox"><input type="checkbox" checked={dontAskAgain} onChange={(event) => setDontAskAgain(event.target.checked)} /> Don’t ask me again</label><div className="confirmation-actions"><button className="secondary-button" onClick={() => setAnalysisConfirmation(null)}>Cancel</button><button className="primary-button" onClick={() => confirmAnalysis(analysisConfirmation)}>Analyze thought</button></div></section></div>}
+      {isGraphOpen && <KnowledgeGraph data={graphData} focusId={graphFocusId} depth={graphDepth} relationshipType={graphRelationship} thoughtType={graphThoughtType} includeSuggested={includeSuggested} onFocus={setGraphFocusId} onClose={() => setIsGraphOpen(false)} onDepthChange={setGraphDepth} onRelationshipChange={setGraphRelationship} onThoughtTypeChange={setGraphThoughtType} onSuggestedChange={setIncludeSuggested} />}
     </div>
   );
 }

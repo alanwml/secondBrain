@@ -33,6 +33,48 @@ class Thought(models.Model):
         return self.text[:80]
 
 
+class NoteConnection(models.Model):
+    class RelationshipType(models.TextChoices):
+        RELATED = "related", "Related"
+        BUILDS_ON = "builds_on", "Builds on"
+        EXAMPLE_OF = "example_of", "Example of"
+        CONTRADICTS = "contradicts", "Contradicts"
+        FOLLOW_UP_TO = "follow_up_to", "Follow-up to"
+
+    class Origin(models.TextChoices):
+        MANUAL = "manual", "Manual"
+        AI_SUGGESTED = "ai_suggested", "AI suggested"
+        AI_CONFIRMED = "ai_confirmed", "AI confirmed"
+        IMPORTED = "imported", "Imported"
+
+    class Status(models.TextChoices):
+        SUGGESTED = "suggested", "Suggested"
+        CONFIRMED = "confirmed", "Confirmed"
+        DISMISSED = "dismissed", "Dismissed"
+        DELETED = "deleted", "Deleted"
+
+    id = models.BigAutoField(primary_key=True)
+    source_thought = models.ForeignKey(Thought, on_delete=models.CASCADE, related_name="outgoing_connections")
+    target_thought = models.ForeignKey(Thought, on_delete=models.CASCADE, related_name="incoming_connections")
+    relationship_type = models.CharField(max_length=30, choices=RelationshipType.choices, default=RelationshipType.RELATED)
+    description = models.TextField(blank=True)
+    origin = models.CharField(max_length=30, choices=Origin.choices, default=Origin.MANUAL)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.CONFIRMED)
+    confidence = models.DecimalField(max_digits=4, decimal_places=3, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+        constraints = [
+            models.CheckConstraint(check=~models.Q(source_thought=models.F("target_thought")), name="connection_not_self_referential"),
+            models.UniqueConstraint(fields=["source_thought", "target_thought", "relationship_type"], name="unique_directed_connection"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.source_thought_id} {self.relationship_type} {self.target_thought_id}"
+
+
 class Analysis(models.Model):
     class Status(models.TextChoices):
         COMPLETED = "completed", "Completed"

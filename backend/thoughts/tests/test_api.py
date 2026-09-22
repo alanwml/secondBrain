@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.core.management import call_command
 from rest_framework.test import APIClient
 
-from thoughts.models import Analysis, AnalysisJob, Thought
+from thoughts.models import Analysis, AnalysisJob, NoteConnection, Thought
 from thoughts.services import process_analysis_job
 
 
@@ -168,3 +168,28 @@ class ThoughtApiTests(TestCase):
         self.assertEqual(item["total_input_tokens"], 300)
         self.assertEqual(item["total_output_tokens"], 75)
         self.assertEqual(item["total_cost_usd"], "0.030000")
+
+    def test_manual_connection_is_canonical_and_duplicate_safe(self):
+        first = Thought.objects.create(id=uuid.uuid4(), text="First note", created_at="2026-01-01T00:00:00Z")
+        second = Thought.objects.create(id=uuid.uuid4(), text="Second note", created_at="2026-01-02T00:00:00Z")
+
+        response = self.client.post(f"/api/thoughts/{second.id}/connections/", {"target_thought_id": str(first.id), "relationship_type": "related", "description": "Same topic"}, format="json")
+        duplicate = self.client.post(f"/api/thoughts/{first.id}/connections/", {"target_thought_id": str(second.id), "relationship_type": "related"}, format="json")
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(duplicate.status_code, 200)
+        self.assertEqual(NoteConnection.objects.count(), 1)
+        self.assertEqual(self.client.get(f"/api/thoughts/{first.id}/connections/").json()[0]["description"], "Same topic")
+
+    def test_graph_returns_two_hop_neighborhood_and_filters(self):
+        first = Thought.objects.create(id=uuid.uuid4(), text="First", type="note", created_at="2026-01-01T00:00:00Z")
+        second = Thought.objects.create(id=uuid.uuid4(), text="Second", type="idea", created_at="2026-01-02T00:00:00Z")
+        third = Thought.objects.create(id=uuid.uuid4(), text="Third", type="task", created_at="2026-01-03T00:00:00Z")
+        NoteConnection.objects.create(source_thought=first, target_thought=second, relationship_type="related")
+        NoteConnection.objects.create(source_thought=second, target_thought=third, relationship_type="builds_on")
+
+        response = self.client.get(f"/api/graph/?focus={first.id}&depth=2&relationship_type=related")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual({node["id"] for node in response.json()["nodes"]}, {str(first.id), str(second.id)})
+        self.assertEqual(len(response.json()["edges"]), 1)
