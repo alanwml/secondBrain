@@ -331,3 +331,96 @@ The initial customer goal is approximately 100 customers in the first year, but 
 
 - [Pre-context disambiguation](checkpoints/pre-context-disambiguation/)
 - [Context-aware analysis with modal fix](checkpoints/context-aware-analysis-modal-fixed/)
+
+## Django + React migration
+
+The `django_version` branch contains the first migration slice toward the new
+Python and React architecture. The original Node.js MVP remains at the project
+root so it can be used for comparison while the migration is underway.
+
+The new application runs as two local processes:
+
+```text
+React/Vite browser app: http://localhost:5173
+             │
+             └── /api requests ──> Django API: http://127.0.0.1:8000
+```
+
+Prerequisites: Python 3.10+, Node.js 20+, and npm. Run these commands from the
+project root unless a `cd` command is shown.
+
+### First-time setup and start the new backend
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py import_legacy_json ../data
+python manage.py runserver
+```
+
+The virtual environment only needs to be created once. On later days, use
+`cd backend && source .venv/bin/activate` before running Django commands.
+
+The importer copies the existing JSON data into `backend/db.sqlite3`. Preview
+the import with `python manage.py import_legacy_json ../data --dry-run` before
+running the real import. The source JSON files are not modified or deleted.
+
+The backend is available at:
+
+- Health check: http://127.0.0.1:8000/api/health/
+- Thought API: http://127.0.0.1:8000/api/thoughts/
+- Django admin: http://127.0.0.1:8000/admin/
+
+### Start the new frontend
+
+In a second terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open http://localhost:5173 in your browser. The React development server
+proxies `/api` requests to Django on port 8000.
+
+### Normal daily startup
+
+Use two terminals after the first-time setup.
+
+Terminal 1:
+
+```bash
+cd backend
+source .venv/bin/activate
+python manage.py runserver
+```
+
+Terminal 2:
+
+```bash
+cd frontend
+npm run dev
+```
+
+### Verification commands
+
+```bash
+cd backend
+source .venv/bin/activate
+python manage.py check
+python manage.py test
+
+cd ../frontend
+npm run build
+```
+
+If the frontend shows an API error, confirm that Django is running and test it
+with `curl http://127.0.0.1:8000/api/health/`. If the database has no thoughts,
+run `python manage.py import_legacy_json ../data` from the `backend` directory.
+
+The migration guide in [`docs/DJANGO_REACT_MIGRATION_GUIDE.md`](docs/DJANGO_REACT_MIGRATION_GUIDE.md)
+describes the architecture and the remaining migration phases.

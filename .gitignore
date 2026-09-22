@@ -2,3 +2,13 @@ data/
 .env
 .vercel/
 .DS_Store
+backend/.venv/
+backend/db.sqlite3
+backend/.env
+backend/**/__pycache__/
+*.pyc
+frontend/node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
