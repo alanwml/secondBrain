@@ -22,6 +22,7 @@ class Thought(models.Model):
     completed = models.BooleanField(default=False)
     selected_context = models.CharField(max_length=255, blank=True, null=True)
     context_status = models.CharField(max_length=30, choices=ContextStatus.choices, default=ContextStatus.NOT_CHECKED)
+    context_decision_made = models.BooleanField(default=False)
     created_at = models.DateTimeField()
     updated_at = models.DateTimeField(auto_now=True)
 

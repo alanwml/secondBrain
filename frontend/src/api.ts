@@ -52,3 +52,10 @@ export function requestAnalysis(id: string): Promise<unknown> {
     body: JSON.stringify({}),
   });
 }
+
+export function selectContext(id: string, context: string): Promise<Thought> {
+  return request<Thought>(`/api/thoughts/${id}/context/`, {
+    method: "POST",
+    body: JSON.stringify({ context }),
+  });
+}

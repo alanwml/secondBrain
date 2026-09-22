@@ -7,7 +7,7 @@ export interface Analysis {
   summary: string;
   explanation: string;
   key_points: string[];
-  contexts: unknown[];
+  contexts: ContextOption[];
   related_concepts: string[];
   related_notes: unknown[];
   sources: unknown[];
@@ -21,6 +21,13 @@ export interface Analysis {
   completed_at: string | null;
 }
 
+export interface ContextOption {
+  name: string;
+  confidence: number;
+  summary: string;
+  example?: string;
+}
+
 export interface Thought {
   id: string;
   text: string;
@@ -29,8 +36,14 @@ export interface Thought {
   completed: boolean;
   selected_context: string | null;
   context_status: string;
+  context_decision_made: boolean;
   created_at: string;
   updated_at: string;
   latest_analysis: Analysis | null;
   analysis_status: AnalysisStatus;
+  analysis_error: string;
+  analysis_runs: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_cost_usd: string;
 }

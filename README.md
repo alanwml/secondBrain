@@ -389,7 +389,18 @@ proxies `/api` requests to Django on port 8000.
 
 ### Normal daily startup
 
-Use two terminals after the first-time setup.
+After the first-time setup, start the complete local application with one
+command from the project root:
+
+```bash
+python3 dev.py
+```
+
+Then open http://localhost:5173. Press `Ctrl+C` to stop both Django and React.
+
+The launcher starts three processes internally—Django, React, and the AI
+worker—but you only need one terminal.
+If you prefer to run them separately for debugging, use the commands below.
 
 Terminal 1:
 
@@ -424,3 +435,21 @@ run `python manage.py import_legacy_json ../data` from the `backend` directory.
 
 The migration guide in [`docs/DJANGO_REACT_MIGRATION_GUIDE.md`](docs/DJANGO_REACT_MIGRATION_GUIDE.md)
 describes the architecture and the remaining migration phases.
+
+### Run AI analysis jobs
+
+The Django backend now includes the AI provider integration and a readable
+management-command worker. It accepts the existing root `.env` configuration
+or a separate `backend/.env` file.
+
+With the backend virtual environment active:
+
+```bash
+cd backend
+source .venv/bin/activate
+python manage.py process_analysis_jobs
+```
+
+Use `--limit 1` to process one job while debugging. The worker updates the
+job and analysis records, and the React interface polls active jobs so the
+status changes without a page refresh.

@@ -45,6 +45,7 @@ class Command(BaseCommand):
                     "completed": bool(raw_thought.get("completed", False)),
                     "selected_context": raw_thought.get("selectedContext"),
                     "context_status": raw_thought.get("contextStatus", Thought.ContextStatus.NOT_CHECKED),
+                    "context_decision_made": bool(raw_thought.get("selectedContext")) or raw_thought.get("contextStatus") == Thought.ContextStatus.UNRESOLVED,
                     "created_at": parse_datetime(raw_thought.get("createdAt")) if raw_thought.get("createdAt") else timezone.now(),
                 },
             )

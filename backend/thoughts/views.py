@@ -81,6 +81,50 @@ def request_thought_analysis(request, thought_id):
     return Response(AnalysisJobSerializer(job).data, status=status.HTTP_202_ACCEPTED)
 
 
+@api_view(["POST"])
+def select_thought_context(request, thought_id):
+    """Save a user's context choice and queue a focused re-analysis."""
+    try:
+        thought = Thought.objects.get(id=thought_id)
+    except (Thought.DoesNotExist, ValueError):
+        return Response({"error": {"code": "not_found", "message": "Thought not found."}}, status=status.HTTP_404_NOT_FOUND)
+
+    raw_context = request.data.get("context", "")
+    context = raw_context.strip() if isinstance(raw_context, str) else ""
+    if not context:
+        return Response({"error": {"code": "invalid_input", "message": "Context is required."}}, status=status.HTTP_400_BAD_REQUEST)
+
+    if thought.context_decision_made:
+        return Response(
+            {"error": {"code": "context_already_selected", "message": "A context has already been selected for this thought."}},
+            status=status.HTTP_409_CONFLICT,
+        )
+
+    if not thought.analyses.filter(status="completed").exists():
+        return Response(
+            {"error": {"code": "analysis_required", "message": "A completed analysis is required before choosing a context."}},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if context == "unresolved":
+        thought.selected_context = None
+        thought.context_status = Thought.ContextStatus.UNRESOLVED
+        thought.context_decision_made = True
+        thought.save(update_fields=["selected_context", "context_status", "context_decision_made", "updated_at"])
+        return Response(ThoughtSerializer(thought).data)
+
+    thought.selected_context = context
+    thought.context_status = Thought.ContextStatus.RESOLVED
+    thought.context_decision_made = True
+    thought.save(update_fields=["selected_context", "context_status", "context_decision_made", "updated_at"])
+
+    active_job = thought.analysis_jobs.filter(status__in=[AnalysisJob.Status.QUEUED, AnalysisJob.Status.PROCESSING]).first()
+    job = active_job or enqueue_analysis(thought=thought)
+    response = ThoughtSerializer(thought).data
+    response["analysis_job"] = AnalysisJobSerializer(job).data
+    return Response(response, status=status.HTTP_202_ACCEPTED)
+
+
 @api_view(["GET"])
 def health_check(request):
     return JsonResponse({"status": "ok", "service": "second-brain-backend"})

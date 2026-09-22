@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
-import { createThought, deleteThought, getThoughts, requestAnalysis, updateThought } from "./api";
+import { createThought, deleteThought, getThoughts, requestAnalysis, selectContext, updateThought } from "./api";
 import type { Thought, ThoughtType } from "./types";
 
 type View = "all" | "inbox" | "tasks" | "ideas" | "pinned";
@@ -22,8 +22,11 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedThoughtId, setSelectedThoughtId] = useState<string | null>(null);
+  const [customContext, setCustomContext] = useState("");
+  const [isSavingContext, setIsSavingContext] = useState(false);
 
   const selectedThought = thoughts.find((thought) => thought.id === selectedThoughtId) ?? null;
+  const hasActiveAnalysis = thoughts.some((thought) => thought.analysis_status === "queued" || thought.analysis_status === "processing");
 
   useEffect(() => {
     getThoughts()
@@ -31,6 +34,14 @@ function App() {
       .catch((loadError: Error) => setError(loadError.message))
       .finally(() => setIsLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!hasActiveAnalysis) return;
+    const interval = window.setInterval(() => {
+      getThoughts().then(setThoughts).catch(() => undefined);
+    }, 2500);
+    return () => window.clearInterval(interval);
+  }, [hasActiveAnalysis]);
 
   const visibleThoughts = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -87,12 +98,36 @@ function App() {
     }
   }
 
+  async function handleContextChoice(thought: Thought, context: string) {
+    if (isSavingContext || thought.context_decision_made) return;
+    if (!context.trim()) {
+      setError("Enter a context before saving it.");
+      return;
+    }
+    setIsSavingContext(true);
+    try {
+      const updated = await selectContext(thought.id, context);
+      setThoughts((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setCustomContext("");
+    } catch (contextError) {
+      setError((contextError as Error).message);
+    } finally {
+      setIsSavingContext(false);
+    }
+  }
+
   function openThought(thought: Thought) {
     setSelectedThoughtId(thought.id);
   }
 
   function closeThought() {
     setSelectedThoughtId(null);
+  }
+
+  function thoughtTypeIcon(thoughtType: ThoughtType) {
+    if (thoughtType === "task") return "✓";
+    if (thoughtType === "idea") return "✧";
+    return "▤";
   }
 
   return (
@@ -166,19 +201,20 @@ function App() {
         <section className="detail-modal" role="dialog" aria-modal="true" aria-labelledby="detail-title">
           <button className="detail-close" onClick={closeThought} aria-label="Close thought details">×</button>
           <div className="detail-header">
-            <div><p className="eyebrow">THOUGHT DETAILS</p><h2 id="detail-title">{selectedThought.type}</h2></div>
-            <span className={`tag ${selectedThought.type}`}>{selectedThought.analysis_status === "completed" ? "Analyzed" : selectedThought.analysis_status}</span>
+            <div className="detail-heading"><p className="eyebrow">THOUGHT DETAILS</p><h2 id="detail-title">{selectedThought.text}</h2></div>
+            <div className="detail-badges"><span className={`detail-type-badge ${selectedThought.type}`}><span aria-hidden="true">{thoughtTypeIcon(selectedThought.type)}</span>{selectedThought.type}</span><span className={`detail-status ${selectedThought.analysis_status}`}><span className="status-dot" aria-hidden="true" />{selectedThought.analysis_status === "completed" ? "Analyzed" : selectedThought.analysis_status}</span></div>
           </div>
-          <p className="detail-original">{selectedThought.text}</p>
 
           {selectedThought.latest_analysis ? <div className="full-analysis">
             <div className="full-analysis-heading"><span className="analysis-preview-icon" aria-hidden="true">✦</span><div><p className="eyebrow">AI ANALYSIS</p><h3>{selectedThought.latest_analysis.summary || "Analysis"}</h3></div></div>
             {selectedThought.latest_analysis.explanation && <section><h4>Explanation</h4><p className="analysis-explanation">{selectedThought.latest_analysis.explanation}</p></section>}
+            {selectedThought.latest_analysis.contexts.length > 0 && selectedThought.context_status === "needs-selection" && !selectedThought.context_decision_made && <section className="context-section"><div className="context-heading"><div><h4>Choose a context</h4><p>This choice is saved once and will not trigger another analysis.</p></div><span className="context-status needs-selection">Needs selection</span></div><div className="context-options">{selectedThought.latest_analysis.contexts.map((context) => <button disabled={isSavingContext} className="context-option" key={context.name} onClick={() => handleContextChoice(selectedThought, context.name)}><span className="context-option-top"><strong>{context.name}</strong><span>{Math.round(context.confidence * 100)}% likely</span></span><span>{context.summary}</span>{context.example && <small>Example: {context.example}</small>}</button>)}</div><div className="custom-context-option"><label htmlFor="custom-context">Your own context</label><textarea id="custom-context" value={customContext} onChange={(event) => setCustomContext(event.target.value)} placeholder="Describe what this thought means to you…" rows={3} disabled={isSavingContext} /><button className="primary-button" disabled={isSavingContext || !customContext.trim()} onClick={() => handleContextChoice(selectedThought, customContext)}>{isSavingContext ? "Saving…" : "Save custom context"}</button></div></section>}
+            {selectedThought.context_decision_made && selectedThought.selected_context && <div className="saved-context"><span className="saved-context-icon" aria-hidden="true">✓</span><div><p className="eyebrow">CONTEXT SELECTED</p><strong>{selectedThought.selected_context}</strong></div></div>}
             {selectedThought.latest_analysis.key_points.length > 0 && <section><h4>Key points</h4><ul>{selectedThought.latest_analysis.key_points.map((point, index) => <li key={`${point}-${index}`}>{point}</li>)}</ul></section>}
             {selectedThought.latest_analysis.related_concepts.length > 0 && <section><h4>Related concepts</h4><div className="concept-list">{selectedThought.latest_analysis.related_concepts.map((concept) => <span key={concept}>{concept}</span>)}</div></section>}
             {selectedThought.latest_analysis.sources.length > 0 && <section><h4>Sources</h4><div className="source-list">{selectedThought.latest_analysis.sources.map((source, index) => { const item = source as { title?: string; url?: string }; return item.url ? <a href={item.url} target="_blank" rel="noreferrer" key={`${item.url}-${index}`}>{item.title || item.url}<small>{item.url}</small></a> : null; })}</div></section>}
-            <div className="analysis-metadata"><span>Model: {selectedThought.latest_analysis.model || "Unknown"}</span><span>In: {selectedThought.latest_analysis.input_tokens ?? "—"}</span><span>Out: {selectedThought.latest_analysis.output_tokens ?? "—"}</span></div>
-          </div> : <div className="no-analysis-detail"><span className="analysis-preview-icon" aria-hidden="true">✦</span><div><h3>No full analysis yet</h3><p>{selectedThought.analysis_status === "queued" ? "This thought is waiting in the analysis queue." : "Run AI analysis to generate an explanation and key points."}</p></div>{selectedThought.type !== "task" && selectedThought.analysis_status === "none" && <button className="primary-button" onClick={() => handleAnalysis(selectedThought)}>Analyze thought</button>}</div>}
+            <div className="analysis-metadata"><span>Runs: {selectedThought.analysis_runs}</span><span>Total input: {selectedThought.total_input_tokens.toLocaleString()}</span><span>Total output: {selectedThought.total_output_tokens.toLocaleString()}</span><span>Total cost: ${selectedThought.total_cost_usd}</span></div>
+          </div> : <div className="no-analysis-detail"><span className="analysis-preview-icon" aria-hidden="true">✦</span><div><h3>{selectedThought.analysis_status === "failed" ? "Analysis failed" : "No full analysis yet"}</h3><p>{selectedThought.analysis_error || (selectedThought.analysis_status === "queued" ? "This thought is waiting in the analysis queue." : selectedThought.analysis_status === "processing" ? "This thought is being analyzed now." : "Run AI analysis to generate an explanation and key points.")}</p></div>{selectedThought.type !== "task" && selectedThought.analysis_status === "none" && <button className="primary-button" onClick={() => handleAnalysis(selectedThought)}>Analyze thought</button>}{selectedThought.analysis_status === "failed" && <button className="primary-button" onClick={() => handleAnalysis(selectedThought)}>Try again</button>}</div>}
         </section>
       </div>}
     </div>

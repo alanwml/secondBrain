@@ -8,4 +8,5 @@ urlpatterns = [
     path("thoughts/", views.thoughts_collection, name="thoughts-collection"),
     path("thoughts/<uuid:thought_id>/", views.thought_detail, name="thought-detail"),
     path("thoughts/<uuid:thought_id>/analysis/", views.request_thought_analysis, name="request-analysis"),
+    path("thoughts/<uuid:thought_id>/context/", views.select_thought_context, name="select-context"),
 ]

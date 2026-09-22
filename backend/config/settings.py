@@ -13,6 +13,9 @@ from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
+# During the migration, also accept the existing project's root .env file so
+# the current local OpenAI configuration can be reused without copying secrets.
+load_dotenv(BASE_DIR.parent / ".env")
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "local-development-only-key")
 DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() == "true"
@@ -84,5 +87,7 @@ REST_FRAMEWORK = {
     ],
 }
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+AI_API_KEY = os.getenv("AI_API_KEY", os.getenv("OPENAI_API_KEY", ""))
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", AI_API_KEY)
 AI_MODEL = os.getenv("AI_MODEL", "gpt-5.5")
+AI_BASE_URL = os.getenv("AI_BASE_URL", "https://api.openai.com/v1")
